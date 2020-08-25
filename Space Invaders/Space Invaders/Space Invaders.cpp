@@ -44,6 +44,7 @@ private:
     int center_x;
     int center_y;
     int invader_count;
+    int invader_direction;
     std::vector<std::vector<char>> world_ressources;
     
 
@@ -54,6 +55,7 @@ public:
         center_x = (x % 2 == 0) ? x / 2 : (x - 1) / 2;
         center_y = (y % 2 == 0) ? y / 2 : (y - 1) / 2;
         invader_count = invaders;
+        invader_direction = 1;
 
         world_ressources.resize(x);
         for (unsigned i = 0; i < world_ressources.size(); i++)
@@ -84,18 +86,32 @@ public:
         }
     };
 
+    void place_laser(char weapon, int x, int y) {
+        world_ressources[x][y] = weapon;
+    };
+
     void move_object(int x, int y, bool up, bool down, bool left, bool right) {
-        // Set the old position of the object too background.
         char object_value = world_ressources[x][y];
+
+        // Set the old position of the object too background.
         world_ressources[x][y] = ' ';
+
+        // If the object would leave the world it will disapear. 
+        if ((x + 1 > size_x) || (x - 1 < 0) || (y + 1 > size_y) || (y - 1 < 0)) {
+            // Player character should not disapear.
+            if (object_value == 'A') {
+                world_ressources[x][y] = 'A';
+            }
+            return;
+        }
 
         // Set the new position of the object.
         if (up) {
-            world_ressources[x + 1][y] = object_value;
+            world_ressources[x - 1][y] = object_value;
         }
 
-        if(down) {
-            world_ressources[x - 1][y] = object_value;
+        if (down) {
+            world_ressources[x + 1][y] = object_value;
         }
 
         if (left) {
@@ -106,6 +122,75 @@ public:
             world_ressources[x][y + 1] = object_value;
         }
         
+    };
+
+    void move_laser(char weapon, int type, int* score, int* lifes) {
+        for (int i = 0; i < size_x; i++) {
+            for (int j = 0; j < size_y; j++) {
+                if (world_ressources[i][j] == weapon) {
+                    // Check if player or enemy laser.
+                    if (type == 1) {
+                        // Check for target hit.
+                        if (world_ressources[i - 1][j] != ' ') {
+                            world_ressources[i - 1][j] = ' ';
+                            world_ressources[i][j] = ' ';
+
+                            // Add points to the score for a hit.
+                            *score += 100;
+                        }
+                        else {
+                            move_object(i, j, true, false, false, false);
+                        }
+                    }
+                    else {
+                        // Check for player hit.
+                        if (world_ressources[i + 1][j] != ' ') {
+                            world_ressources[i + 1][j] = ' ';
+                            world_ressources[i][j] = ' ';
+
+                            // Subtract one life, if player is hit. 
+                            *lifes -= 1;
+                        }
+                        else {
+                            move_object(i, j, false, true, false, false);
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    void move_invaders(char invader_character, int rounds) {
+        // Move down. 
+        //if (rounds % center_y == 0) {
+            for (int i = size_x - 1; i >= 0; i--) {
+                for (int j = 0; j < size_y; j++) {
+                    if (world_ressources[i][j] == invader_character) {
+                        move_object(i, j, false, true, false, false);
+                    }
+                }
+            }
+            if (invader_direction == 1) {
+                invader_direction = -1;
+            }
+            else {
+                invader_direction = 1;
+            }
+        //}
+        /*else {
+            for (int i = size_x - 1; i >= 0; i--) {
+                for (int j = 0; j < size_y; j++) {
+                    // Move right.
+                    if ((world_ressources[i][j] == invader_character) && (invader_direction == 1)) {
+                        move_object(i, j, false, false, false, true);
+                    }
+                    // Move left.
+                    else if ((world_ressources[i][j] == invader_character) && (invader_direction == -1)) {
+                        move_object(i, j, false, false, true, false);
+                    }
+                }
+            }
+        }*/
     };
 
     void render(int score, int lifes) {
@@ -132,15 +217,28 @@ void sleep(int seconds) {
     std::this_thread::sleep_for(std::chrono::seconds(seconds));
 }
 
+void update_screen(World gameworld, int score, int lifes) {
+    gameworld.render(score, lifes);
+}
+
 int main()
 {
     std::string start;
     char key_press;
+    int score = 0;
+    int lifes = 3;
+    bool victory = false;
+    bool fail = false;
 
     // Start Screen. 
     std::cout << "------------------- SPACE INVADERS -------------------" << std::endl;
     std::cout << std::endl << std::endl << std::endl;
+    std::cout << "Controlls: " << std::endl;
+    std::cout << " - A: Move left." << std::endl;
+    std::cout << " - S: Move right." << std::endl;
+    std::cout << " - M: Fire laser." << std::endl << std::endl << std::endl;
     std::cout << "Press ENTER start and ESC to leave" << std::endl;
+    std::cout << "------------------------------------------------------" << std::endl;
 
     // Get user input. 
     std::getline(std::cin, start);
@@ -157,7 +255,7 @@ int main()
     
     // Game loop.
     int rounds = 0;
-    while (rounds <= 15) {
+    while (rounds <= 30) {
         // Player controlls. 
         if (_kbhit()) {
             key_press = _getch();
@@ -177,25 +275,24 @@ int main()
                 if (key_press == 'd') {
                     Space.move_object(Space.get_size_x() - 1, j, false, false, false, true);
                 }
+
+                // Fire laser.
+                if (key_press == 'm') {
+                    Space.place_laser(Player_1.weapon, Space.get_size_x() - 2, j);
+                }
+
+                update_screen(Space, score, lifes);
+                break;
             }
         }
-        Space.render(0, 3);
-        sleep(1);
+
         rounds += 1;
+        Space.move_laser(Player_1.weapon, 1, &score, &lifes);
+        Space.move_invaders(Alien_2.model, rounds);
+        Space.move_invaders(Alien_1.model, rounds);
+        update_screen(Space, score, lifes);
+        sleep(1);
     }
-    
-
-    
-
-    /* Fire weapon.
-    if (keyPress == 'm' && laserReady > 2) {
-        for (x = 0; x < sizex; x = x + 1) {
-            if (world[sizey - 1][x] == player) {
-                world[sizey - 2][x] = playerLaser;
-                laserReady = 0;
-            }
-        }
-    }*/
 
     system("pause");
 }
